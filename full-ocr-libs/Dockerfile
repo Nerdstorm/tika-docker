@@ -18,7 +18,9 @@ FROM base as dependencies
 ARG UID_GID="35002:35002"
 ARG JRE='openjdk-17-jre-headless'
 
-RUN DEBIAN_FRONTEND=noninteractive apt-get -y install $JRE gdal-bin tesseract-ocr \
+WORKDIR "/tmp/"
+
+RUN DEBIAN_FRONTEND=noninteractive apt-get -y install $JRE maven gdal-bin tesseract-ocr \
         tesseract-ocr-eng tesseract-ocr-ita tesseract-ocr-fra tesseract-ocr-spa tesseract-ocr-deu
 
 RUN echo ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true | debconf-set-selections \
@@ -26,51 +28,29 @@ RUN echo ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula selec
 
 FROM dependencies as fetch_tika
 ARG TIKA_VERSION
-ARG TIKA_JAR_NAME=tika
+ARG TIKA_PACKAGE_NAME=tika
 ARG CHECK_SIG=true
 
+RUN DEBIAN_FRONTEND=noninteractive apt-get -y install gnupg2 wget 
 
-WORKDIR "/tmp/"
-RUN wget "https://www.apache.org/dyn/closer.lua/tika/${TIKA_VERSION}/${TIKA_JAR_NAME}-${TIKA_VERSION}-src.zip" -o "/tmp/${TIKA_JAR_NAME}-${TIKA_VERSION}-src.zip"
-RUN unzip "${TIKA_JAR_NAME}-${TIKA_VERSION}-src.zip"
+RUN wget "https://www.apache.org/dyn/closer.lua/tika/${TIKA_VERSION}/${TIKA_PACKAGE_NAME}-${TIKA_VERSION}-src.zip" -o "/tmp/${TIKA_PACKAGE_NAME}-${TIKA_VERSION}-src.zip"
+RUN wget -t 10 --max-redirect 1 --retry-connrefused -qO- https://downloads.apache.org/tika/KEYS | gpg --import
 
-ENV NEAREST_TIKA_SERVER_URL="https://www.apache.org/dyn/closer.cgi/tika/${TIKA_VERSION}/${TIKA_JAR_NAME}-${TIKA_VERSION}.jar?filename=tika/${TIKA_VERSION}/${TIKA_JAR_NAME}-${TIKA_VERSION}.jar&action=download" \
-   NEAREST_TIKA_SERVER_URL_OLD="https://www.apache.org/dyn/closer.cgi/tika/${TIKA_JAR_NAME}-${TIKA_VERSION}.jar?filename=tika/${TIKA_JAR_NAME}-${TIKA_VERSION}.jar&action=download" \
-    ARCHIVE_TIKA_SERVER_URL="https://archive.apache.org/dist/tika/${TIKA_VERSION}/${TIKA_JAR_NAME}-${TIKA_VERSION}.jar" \
-    ARCHIVE_TIKA_SERVER_URL_OLD="https://archive.apache.org/dist/tika/${TIKA_JAR_NAME}-${TIKA_VERSION}.jar" \
-    BACKUP_TIKA_SERVER_URL="https://downloads.apache.org/tika/${TIKA_JAR_NAME}-${TIKA_VERSION}.jar" \
-    DEFAULT_TIKA_SERVER_ASC_URL="https://downloads.apache.org/tika/${TIKA_VERSION}/${TIKA_JAR_NAME}-${TIKA_VERSION}.jar.asc" \
-    DEFAULT_TIKA_SERVER_ASC_URL_OLD="https://downloads.apache.org/tika/${TIKA_JAR_NAME}-${TIKA_VERSION}.jar.asc" \
-    ARCHIVE_TIKA_SERVER_ASC_URL="https://archive.apache.org/dist/tika/${TIKA_VERSION}/${TIKA_JAR_NAME}-${TIKA_VERSION}.jar.asc" \
-    ARCHIVE_TIKA_SERVER_ASC_URL_OLD="https://archive.apache.org/dist/tika/${TIKA_JAR_NAME}-${TIKA_VERSION}.jar.asc" \
-    TIKA_VERSION=$TIKA_VERSION
+RUN if [ "$CHECK_SIG" = "true" ] ; then gpg --verify ${TIKA_PACKAGE_NAME}-${TIKA_VERSION}-src.zip.asc ${TIKA_PACKAGE_NAME}-${TIKA_VERSION}-src.zip; fi
 
-RUN DEBIAN_FRONTEND=noninteractive apt-get -y install gnupg2 wget \
-    && wget -t 10 --max-redirect 1 --retry-connrefused -qO- https://downloads.apache.org/tika/KEYS | gpg --import \
-    && wget -t 10 --max-redirect 1 --retry-connrefused $NEAREST_TIKA_SERVER_URL -O /${TIKA_JAR_NAME}-${TIKA_VERSION}.jar || rm /${TIKA_JAR_NAME}-${TIKA_VERSION}.zip \
-    && sh -c "[ -f /${TIKA_JAR_NAME}-${TIKA_VERSION}-src.zip ]" || wget $NEAREST_TIKA_SERVER_URL_OLD -O /${TIKA_JAR_NAME}-${TIKA_VERSION}-src.zip || rm /${TIKA_JAR_NAME}-${TIKA_VERSION}-src.zip \
-    && sh -c "[ -f /${TIKA_JAR_NAME}-${TIKA_VERSION}-src.zip ]" || wget $ARCHIVE_TIKA_SERVER_URL -O /${TIKA_JAR_NAME}-${TIKA_VERSION}-src.zip || rm /${TIKA_JAR_NAME}-${TIKA_VERSION}-src.zip \
-    && sh -c "[ -f /${TIKA_JAR_NAME}-${TIKA_VERSION}-src.zip ]" || wget $ARCHIVE_TIKA_SERVER_URL_OLD -O /${TIKA_JAR_NAME}-${TIKA_VERSION}-src.zip || rm /${TIKA_JAR_NAME}-${TIKA_VERSION}-src.zip \
-    && sh -c "[ -f /${TIKA_JAR_NAME}-${TIKA_VERSION}-src.zip ]" || wget $BACKUP_TIKA_SERVER_URL -O /${TIKA_JAR_NAME}-${TIKA_VERSION}-src.zip || rm /${TIKA_JAR_NAME}-${TIKA_VERSION}-src.zip \
-    && sh -c "[ -f /${TIKA_JAR_NAME}-${TIKA_VERSION}-src.zip ]" || exit 1 \
-    && wget -t 10 --max-redirect 1 --retry-connrefused $DEFAULT_TIKA_SERVER_ASC_URL -O /${TIKA_JAR_NAME}-${TIKA_VERSION}-src.zip.asc  || rm /${TIKA_JAR_NAME}-${TIKA_VERSION}-src.zip.asc \
-    && sh -c "[ -f /${TIKA_JAR_NAME}-${TIKA_VERSION}-src.zip.asc ]" || wget $DEFAULT_TIKA_SERVER_ASC_URL_OLD -O /${TIKA_JAR_NAME}-${TIKA_VERSION}-src.zip.asc || rm /${TIKA_JAR_NAME}-${TIKA_VERSION}-src.zip.asc \
-    && sh -c "[ -f /${TIKA_JAR_NAME}-${TIKA_VERSION}-src.zip.asc ]" || wget $ARCHIVE_TIKA_SERVER_ASC_URL -O /${TIKA_JAR_NAME}-${TIKA_VERSION}-src.zip.asc || rm /${TIKA_JAR_NAME}-${TIKA_VERSION}-src.zip.asc \
-    && sh -c "[ -f /${TIKA_JAR_NAME}-${TIKA_VERSION}-src.zip.asc ]" || wget $ARCHIVE_TIKA_SERVER_ASC_URL_OLD -O /${TIKA_JAR_NAME}-${TIKA_VERSION}-src.zip.asc || rm /${TIKA_JAR_NAME}-${TIKA_VERSION}-src.zip.asc \
-    && sh -c "[ -f /${TIKA_JAR_NAME}-${TIKA_VERSION}-src.zip.asc ]" || exit 1;
-
-RUN if [ "$CHECK_SIG" = "true" ] ; then gpg --verify /${TIKA_JAR_NAME}-${TIKA_VERSION}.zip.asc /${TIKA_JAR_NAME}-${TIKA_VERSION}.zip; fi
+WORKDIR "/tmp/${TIKA_PACKAGE_NAME}-${TIKA_VERSION}/"
+RUN mvn install
+COPY "./tika-server/target/${TIKA_PACKAGE_NAME}-server-${TIKA_VERSION}.jar" "/${TIKA_PACKAGE_NAME}-${TIKA_VERSION}.jar"
 
 FROM dependencies as runtime
 RUN apt-get clean -y && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 ARG TIKA_VERSION
 ENV TIKA_VERSION=$TIKA_VERSION
-ARG TIKA_JAR_NAME
-ENV TIKA_JAR_NAME=$TIKA_JAR_NAME
-COPY --from=fetch_tika /${TIKA_JAR_NAME}-${TIKA_VERSION}.zip /${TIKA_JAR_NAME}-${TIKA_VERSION}.zip
+ARG TIKA_PACKAGE_NAME
+ENV TIKA_PACKAGE_NAME=$TIKA_PACKAGE_NAME
 USER $UID_GID
 EXPOSE 9998
-ENTRYPOINT [ "/bin/sh", "-c", "exec java -jar /${TIKA_JAR_NAME}-${TIKA_VERSION}.zip -h 0.0.0.0 $0 $@"]
+ENTRYPOINT [ "/bin/sh", "-c", "exec java -jar /${TIKA_PACKAGE_NAME}-${TIKA_VERSION}.jar -h 0.0.0.0 $0 $@"]
 
 LABEL maintainer="Apache Tika Developers dev@tika.apache.org"
 
