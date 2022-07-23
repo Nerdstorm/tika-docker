@@ -67,6 +67,11 @@ fi
 
 
 case "$subcommand" in
+  build-src)
+    # Build slim version with minimal dependencies
+    docker build -t apache/tika:${version} --build-arg TIKA_VERSION=${version} --build-arg TIKA_JAR_NAME=${jar} - < full-ocr-libs/Dockerfile --no-cache
+    ;;
+
   build)
     # Build slim version with minimal dependencies
     docker build -t apache/tika:${version} --build-arg TIKA_VERSION=${version} --build-arg TIKA_JAR_NAME=${jar} - < minimal/Dockerfile --no-cache
